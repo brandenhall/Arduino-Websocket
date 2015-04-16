@@ -1,0 +1,126 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>
+            Arduino WebSocket Server with Multiple Client Connection Demo
+        </title>
+        <style>
+        	#redbar {
+        		color: #fff;
+        		background-color: #f00;
+        		width: 500px;
+        		height: 30px;
+        	}
+        	#greenbar {
+        		color: #fff;
+        		background-color: #0f0;
+        		width: 500px;
+        		height: 30px;
+        	}
+        	#bluebar {
+        		color: #fff;
+        		background-color: #00f;
+        		width: 500px;
+        		height: 30px;
+        	}        	        	
+        </style>
+
+		<script language = "javascript"type = "text/javascript">
+			var wsUri = "ws://10.86.84.206/";
+			var output;
+			
+			function init() {
+			    testWebSocket();
+			}
+			
+			function testWebSocket() {
+			    websocket = new WebSocket(wsUri);
+			    websocket.onopen = function(evt) {
+			        console.log("CONNECTED");
+			    };
+			    websocket.onclose = function(evt) {
+			        console.log("DISCONNECTED");
+			    };
+			    websocket.onmessage = function(evt) {
+					console.log("onmessage");
+					var type = evt.data.charAt(0);
+					if (type == 'a'){ // Analog
+						var pin = evt.data.charAt(1);
+						var element;
+
+						if (pin == 1) {
+							element = document.getElementById("redbar");
+							element.style.width = evt.data.substring(2) + "px";
+						} else if (pin == 2) {
+							element = document.getElementById("greenbar");
+							element.style.width = evt.data.substring(2) + "px";			    		
+						} else if (pin == 3) {
+							element = document.getElementById("bluebar");
+							element.style.width = evt.data.substring(2) + "px";			    		
+						}
+					}
+					else if (type == 'd'){ // digital ==> broadcast
+					console.log("broadcast: " + evt.data);
+						var pin = evt.data.charAt(1);
+						var value = evt.data.charAt(2);
+						var element;
+						if (pin == 8) {
+							if (value == 1){
+								document.getElementById("d8").checked = true;
+							}
+							else {
+								document.getElementById("d8").checked = false;
+							}
+						}
+						else if (pin == 9){
+							if (value == 1){
+								document.getElementById("d9").checked = true;
+							}
+							else {
+								document.getElementById("d9").checked = false;
+							}
+						}
+					}
+			    };
+			    websocket.onerror = function(evt) {
+			        console.log("ERROR: " + evt.data);
+			    };
+			}
+			
+			function changeRed() {
+				var value = document.getElementById("d8").checked;
+				var message = "d8";
+				
+				message += value ? "1" : "0";
+				
+			    console.log("SENT: " + message);
+			    websocket.send(message);
+			}
+			
+			function changeGreen() {
+				var value = document.getElementById("d9").checked;
+				var message = "d9";
+				
+				message += value ? "1" : "0";
+				
+			    console.log("SENT: " + message);
+			    websocket.send(message);
+			}			
+			
+			
+			window.addEventListener("load", init, false); 
+        </script>
+    </head>
+    <body>
+        <h2>
+            Arduino WebSocket Server with Multiple Client Connection Demo
+        </h2>
+		<input id="d8" type="checkbox" onchange="changeRed();">Pin 8</input>
+		<input id="d9" type="checkbox" onchange="changeGreen();">Pin 9</input>
+
+		<div id="redbar">Pin 1</div>
+		<div id="greenbar">Pin 2</div>
+		<div id="bluebar">Pin 3</div>
+    </body>
+</html>
