@@ -45,7 +45,6 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 
 #include <Arduino.h>
 #include <Stream.h>
-#include "String.h"
 #include "Server.h"
 #include "Client.h"
 

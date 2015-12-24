@@ -1,6 +1,8 @@
 //#define DEBUGGING
 //#define SUPPORT_HIXIE_76
 
+//MS:
+
 #include "global.h"
 #include "WebSocketServer.h"
 
@@ -9,7 +11,7 @@
 #endif
 
 #include "sha1.h"
-#include "base64.h"
+#include "Base64.h"
 
 
 bool WebSocketServer::handshake(Client &client) {
@@ -176,9 +178,14 @@ bool WebSocketServer::analyzeRequest(int bufferLength) {
             char result[21];
             char b64Result[30];
 
-            Sha1.init();
-            Sha1.print(newkey);
-            hash = Sha1.result();
+            SHA1Context sha;
+            int err;
+            uint8_t Message_Digest[20];
+            
+            err = SHA1Reset(&sha);
+            err = SHA1Input(&sha, reinterpret_cast<const uint8_t *>(newkey.c_str()), newkey.length());
+            err = SHA1Result(&sha, Message_Digest);
+            hash = Message_Digest;
 
             for (int i=0; i<20; ++i) {
                 result[i] = (char)hash[i];
@@ -414,14 +421,12 @@ void WebSocketServer::sendEncodedData(char *str) {
     if (size > 125) {
         socket_client->write(126);
         socket_client->write((uint8_t) (size >> 8));
-        socket_client->write((uint8_t) (size && 0xFF));
+        socket_client->write((uint8_t) (size & 0xFF));
     } else {
         socket_client->write((uint8_t) size);
     }
 
-    for (int i=0; i<size; ++i) {
-        socket_client->write(str[i]);
-    }
+    socket_client->print(str);
 }
 
 void WebSocketServer::sendEncodedData(String str) {

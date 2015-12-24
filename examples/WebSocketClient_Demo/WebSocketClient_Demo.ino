@@ -1,58 +1,41 @@
-#include <SPI.h>
-#include <SC16IS750.h>
-#include <WiFly.h>
-
-// Here we define a maximum framelength to 64 bytes. Default is 256.
-#define MAX_FRAME_LENGTH 64
-
-// Define how many callback functions you have. Default is 1.
-#define CALLBACK_FUNCTIONS 1
-
+#include <ESP8266WiFi.h>
 #include <WebSocketClient.h>
 
-WiFlyClient client = WiFlyClient();
+const char* ssid     = "SSID HERE";
+const char* password = "PASSWORD HERE";
+char path[] = "/";
+char host[] = "echo.websocket.org";
+  
 WebSocketClient webSocketClient;
 
+// Use WiFiClient class to create TCP connections
+WiFiClient client;
+
 void setup() {
-  
+  Serial.begin(115200);
+  delay(10);
 
-  Serial.begin(9600);
-  SC16IS750.begin();
-  
-  WiFly.setUart(&SC16IS750);
-  
-  WiFly.begin();
-  
-  // This is for an unsecured network
-  // For a WPA1/2 network use auth 3, and in another command send 'set wlan phrase PASSWORD'
-  // For a WEP network use auth 2, and in another command send 'set wlan key KEY'
-  WiFly.sendCommand(F("set wlan auth 1"));
-  WiFly.sendCommand(F("set wlan channel 0"));
-  WiFly.sendCommand(F("set ip dhcp 1"));
-  
-  Serial.println(F("Joining WiFi network..."));
-  
+  // We start by connecting to a WiFi network
 
-  // Here is where you set the network name to join
-  if (!WiFly.sendCommand(F("join arduino_wifi"), "Associated!", 20000, false)) {    
-    Serial.println(F("Association failed."));
-    while (1) {
-      // Hang on failure.
-    }
-  }
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
   
-  if (!WiFly.waitForResponse("DHCP in", 10000)) {  
-    Serial.println(F("DHCP failed."));
-    while (1) {
-      // Hang on failure.
-    }
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
 
-  // This is how you get the local IP as an IPAddress object
-  Serial.println(WiFly.localIP());
+  Serial.println("");
+  Serial.println("WiFi connected");  
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  delay(5000);
   
-  // This delay is needed to let the WiFly respond properly
-  delay(100);
 
   // Connect to the websocket server
   if (client.connect("echo.websocket.org", 80)) {
@@ -65,9 +48,8 @@ void setup() {
   }
 
   // Handshake with the server
-  webSocketClient.path = "/";
-  webSocketClient.host = "echo.websocket.org";
-  
+  webSocketClient.path = path;
+  webSocketClient.host = host;
   if (webSocketClient.handshake(client)) {
     Serial.println("Handshake successful");
   } else {
@@ -76,15 +58,16 @@ void setup() {
       // Hang on failure
     }  
   }
+
 }
+
 
 void loop() {
   String data;
-  
+
   if (client.connected()) {
     
-    data = webSocketClient.getData();
-
+    webSocketClient.getData(data);
     if (data.length() > 0) {
       Serial.print("Received data: ");
       Serial.println(data);
@@ -97,7 +80,6 @@ void loop() {
     webSocketClient.sendData(data);
     
   } else {
-    
     Serial.println("Client disconnected.");
     while (1) {
       // Hang on disconnect.
@@ -106,4 +88,5 @@ void loop() {
   
   // wait to fully let the client disconnect
   delay(3000);
+  
 }

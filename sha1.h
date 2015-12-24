@@ -1,43 +1,73 @@
-#ifndef Sha1_h
-#define Sha1_h
+/*
+ *  sha1.h
+ *
+ *  Description:
+ *      This is the header file for code which implements the Secure
+ *      Hashing Algorithm 1 as defined in FIPS PUB 180-1 published
+ *      April 17, 1995.
+ *
+ *      Many of the variable names in this code, especially the
+ *      single character names, were used because those were the names
+ *      used in the publication.
+ *
+ *      Please read the file sha1.c for more information.
+ *
+ */
 
-#include <inttypes.h>
-#include "Print.h"
+#ifndef _SHA1_H_
+#define _SHA1_H_
 
-#define HASH_LENGTH 20
-#define BLOCK_LENGTH 64
+#include <stdint.h>
+/*
+ * If you do not have the ISO standard stdint.h header file, then you
+ * must typdef the following:
+ *    name              meaning
+ *  uint32_t         unsigned 32 bit integer
+ *  uint8_t          unsigned 8 bit integer (i.e., unsigned char)
+ *  int_least16_t    integer of >= 16 bits
+ *
+ */
 
-union _buffer {
-  uint8_t b[BLOCK_LENGTH];
-  uint32_t w[BLOCK_LENGTH/4];
-};
-union _state {
-  uint8_t b[HASH_LENGTH];
-  uint32_t w[HASH_LENGTH/4];
-};
-
-class Sha1Class : public Print
+#ifndef _SHA_enum_
+#define _SHA_enum_
+enum
 {
-  public:
-    void init(void);
-    void initHmac(const uint8_t* secret, int secretLength);
-    uint8_t* result(void);
-    uint8_t* resultHmac(void);
-    virtual size_t write(uint8_t);
-    using Print::write;
-  private:
-    void pad();
-    void addUncounted(uint8_t data);
-    void hashBlock();
-    uint32_t rol32(uint32_t number, uint8_t bits);
-    _buffer buffer;
-    uint8_t bufferOffset;
-    _state state;
-    uint32_t byteCount;
-    uint8_t keyBuffer[BLOCK_LENGTH];
-    uint8_t innerHash[HASH_LENGTH];
-    
+    shaSuccess = 0,
+    shaNull,            /* Null pointer parameter */
+    shaInputTooLong,    /* input data too long */
+    shaStateError       /* called Input after Result */
 };
-extern Sha1Class Sha1;
+#endif
+#define SHA1HashSize 20
+
+/*
+ *  This structure will hold context information for the SHA-1
+ *  hashing operation
+ */
+typedef struct SHA1Context
+{
+    uint32_t Intermediate_Hash[SHA1HashSize/4]; /* Message Digest  */
+    
+    uint32_t Length_Low;            /* Message length in bits      */
+    uint32_t Length_High;           /* Message length in bits      */
+    
+    /* Index into message block array   */
+    int_least16_t Message_Block_Index;
+    uint8_t Message_Block[64];      /* 512-bit message blocks      */
+    
+    int Computed;               /* Is the digest computed?         */
+    int Corrupted;             /* Is the message digest corrupted? */
+} SHA1Context;
+
+/*
+ *  Function Prototypes
+ */
+
+int SHA1Reset(  SHA1Context *);
+int SHA1Input(  SHA1Context *,
+              const uint8_t *,
+              unsigned int);
+int SHA1Result( SHA1Context *,
+               uint8_t Message_Digest[SHA1HashSize]);
 
 #endif

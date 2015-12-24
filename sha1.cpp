@@ -1,152 +1,389 @@
-#include <string.h>
-#include <avr/io.h>
-#include <avr/pgmspace.h>
+/*
+ *  sha1.c
+ *
+ *  Description:
+ *      This file implements the Secure Hashing Algorithm 1 as
+ *      defined in FIPS PUB 180-1 published April 17, 1995.
+ *
+ *      The SHA-1, produces a 160-bit message digest for a given
+ *      data stream.  It should take about 2**n steps to find a
+ *      message with the same digest as a given message and
+ *      2**(n/2) to find any two messages with the same digest,
+ *      when n is the digest size in bits.  Therefore, this
+ *      algorithm can serve as a means of providing a
+ *      "fingerprint" for a message.
+ *
+ *  Portability Issues:
+ *      SHA-1 is defined in terms of 32-bit "words".  This code
+ *      uses <stdint.h> (included via "sha1.h" to define 32 and 8
+ *      bit unsigned integer types.  If your C compiler does not
+ *      support 32 bit unsigned integers, this code is not
+ *      appropriate.
+ *
+ *  Caveats:
+ *      SHA-1 is designed to work with messages less than 2^64 bits
+ *      long.  Although SHA-1 allows a message digest to be generated
+ *      for messages of any number of bits less than 2^64, this
+ *      implementation only works with messages with a length that is
+ *      a multiple of the size of an 8-bit character.
+ *
+ */
+
 #include "sha1.h"
 
-#define SHA1_K0 0x5a827999
-#define SHA1_K20 0x6ed9eba1
-#define SHA1_K40 0x8f1bbcdc
-#define SHA1_K60 0xca62c1d6
+/*
+ *  Define the SHA1 circular left shift macro
+ */
+#define SHA1CircularShift(bits,word) \
+(((word) << (bits)) | ((word) >> (32-(bits))))
 
-uint8_t sha1InitState[] PROGMEM = {
-  0x01,0x23,0x45,0x67, // H0
-  0x89,0xab,0xcd,0xef, // H1
-  0xfe,0xdc,0xba,0x98, // H2
-  0x76,0x54,0x32,0x10, // H3
-  0xf0,0xe1,0xd2,0xc3  // H4
-};
+/* Local Function Prototyptes */
+void SHA1PadMessage(SHA1Context *);
+void SHA1ProcessMessageBlock(SHA1Context *);
 
-void Sha1Class::init(void) {
-  memcpy_P(state.b,sha1InitState,HASH_LENGTH);
-  byteCount = 0;
-  bufferOffset = 0;
-}
-
-uint32_t Sha1Class::rol32(uint32_t number, uint8_t bits) {
-  return ((number << bits) | (number >> (32-bits)));
-}
-
-void Sha1Class::hashBlock() {
-  uint8_t i;
-  uint32_t a,b,c,d,e,t;
-
-  a=state.w[0];
-  b=state.w[1];
-  c=state.w[2];
-  d=state.w[3];
-  e=state.w[4];
-  for (i=0; i<80; i++) {
-    if (i>=16) {
-      t = buffer.w[(i+13)&15] ^ buffer.w[(i+8)&15] ^ buffer.w[(i+2)&15] ^ buffer.w[i&15];
-      buffer.w[i&15] = rol32(t,1);
+/*
+ *  SHA1Reset
+ *
+ *  Description:
+ *      This function will initialize the SHA1Context in preparation
+ *      for computing a new SHA1 message digest.
+ *
+ *  Parameters:
+ *      context: [in/out]
+ *          The context to reset.
+ *
+ *  Returns:
+ *      sha Error Code.
+ *
+ */
+int SHA1Reset(SHA1Context *context)
+{
+    if (!context)
+    {
+        return shaNull;
     }
-    if (i<20) {
-      t = (d ^ (b & (c ^ d))) + SHA1_K0;
-    } else if (i<40) {
-      t = (b ^ c ^ d) + SHA1_K20;
-    } else if (i<60) {
-      t = ((b & c) | (d & (b | c))) + SHA1_K40;
-    } else {
-      t = (b ^ c ^ d) + SHA1_K60;
+    
+    context->Length_Low             = 0;
+    context->Length_High            = 0;
+    context->Message_Block_Index    = 0;
+    
+    context->Intermediate_Hash[0]   = 0x67452301;
+    context->Intermediate_Hash[1]   = 0xEFCDAB89;
+    context->Intermediate_Hash[2]   = 0x98BADCFE;
+    context->Intermediate_Hash[3]   = 0x10325476;
+    context->Intermediate_Hash[4]   = 0xC3D2E1F0;
+    
+    context->Computed   = 0;
+    context->Corrupted  = 0;
+    
+    return shaSuccess;
+}
+
+/*
+ *  SHA1Result
+ *
+ *  Description:
+ *      This function will return the 160-bit message digest into the
+ *      Message_Digest array  provided by the caller.
+ *      NOTE: The first octet of hash is stored in the 0th element,
+ *            the last octet of hash in the 19th element.
+ *
+ *  Parameters:
+ *      context: [in/out]
+ *          The context to use to calculate the SHA-1 hash.
+ *      Message_Digest: [out]
+ *          Where the digest is returned.
+ *
+ *  Returns:
+ *      sha Error Code.
+ *
+ */
+int SHA1Result( SHA1Context *context,
+               uint8_t Message_Digest[SHA1HashSize])
+{
+    int i;
+    
+    if (!context || !Message_Digest)
+    {
+        return shaNull;
     }
-    t+=rol32(a,5) + e + buffer.w[i&15];
-    e=d;
-    d=c;
-    c=rol32(b,30);
-    b=a;
-    a=t;
-  }
-  state.w[0] += a;
-  state.w[1] += b;
-  state.w[2] += c;
-  state.w[3] += d;
-  state.w[4] += e;
+    
+    if (context->Corrupted)
+    {
+        return context->Corrupted;
+    }
+    
+    if (!context->Computed)
+    {
+        SHA1PadMessage(context);
+        for(i=0; i<64; ++i)
+        {
+            /* message may be sensitive, clear it out */
+            context->Message_Block[i] = 0;
+        }
+        context->Length_Low = 0;    /* and clear length */
+        context->Length_High = 0;
+        context->Computed = 1;
+        
+    }
+    
+    for(i = 0; i < SHA1HashSize; ++i)
+    {
+        Message_Digest[i] = context->Intermediate_Hash[i>>2]
+        >> 8 * ( 3 - ( i & 0x03 ) );
+    }
+    
+    return shaSuccess;
 }
 
-void Sha1Class::addUncounted(uint8_t data) {
-  buffer.b[bufferOffset ^ 3] = data;
-  bufferOffset++;
-  if (bufferOffset == BLOCK_LENGTH) {
-    hashBlock();
-    bufferOffset = 0;
-  }
+/*
+ *  SHA1Input
+ *
+ *  Description:
+ *      This function accepts an array of octets as the next portion
+ *      of the message.
+ *
+ *  Parameters:
+ *      context: [in/out]
+ *          The SHA context to update
+ *      message_array: [in]
+ *          An array of characters representing the next portion of
+ *          the message.
+ *      length: [in]
+ *          The length of the message in message_array
+ *
+ *  Returns:
+ *      sha Error Code.
+ *
+ */
+int SHA1Input(    SHA1Context    *context,
+              const uint8_t  *message_array,
+              unsigned       length)
+{
+    if (!length)
+    {
+        return shaSuccess;
+    }
+    
+    if (!context || !message_array)
+    {
+        return shaNull;
+    }
+    
+    if (context->Computed)
+    {
+        context->Corrupted = shaStateError;
+        
+        return shaStateError;
+    }
+    
+    if (context->Corrupted)
+    {
+        return context->Corrupted;
+    }
+    while(length-- && !context->Corrupted)
+    {
+        context->Message_Block[context->Message_Block_Index++] =
+        (*message_array & 0xFF);
+        
+        context->Length_Low += 8;
+        if (context->Length_Low == 0)
+        {
+            context->Length_High++;
+            if (context->Length_High == 0)
+            {
+                /* Message is too long */
+                context->Corrupted = 1;
+            }
+        }
+        
+        if (context->Message_Block_Index == 64)
+        {
+            SHA1ProcessMessageBlock(context);
+        }
+        
+        message_array++;
+    }
+    
+    return shaSuccess;
 }
 
-size_t Sha1Class::write(uint8_t data) {
-  ++byteCount;
-  addUncounted(data);
-
-  return sizeof(data);
+/*
+ *  SHA1ProcessMessageBlock
+ *
+ *  Description:
+ *      This function will process the next 512 bits of the message
+ *      stored in the Message_Block array.
+ *
+ *  Parameters:
+ *      None.
+ *
+ *  Returns:
+ *      Nothing.
+ *
+ *  Comments:
+ 
+ *      Many of the variable names in this code, especially the
+ *      single character names, were used because those were the
+ *      names used in the publication.
+ *
+ *
+ */
+void SHA1ProcessMessageBlock(SHA1Context *context)
+{
+    const uint32_t K[] =    {       /* Constants defined in SHA-1   */
+        0x5A827999,
+        0x6ED9EBA1,
+        0x8F1BBCDC,
+        0xCA62C1D6
+    };
+    int           t;                 /* Loop counter                */
+    uint32_t      temp;              /* Temporary word value        */
+    uint32_t      W[80];             /* Word sequence               */
+    uint32_t      A, B, C, D, E;     /* Word buffers                */
+    
+    /*
+     *  Initialize the first 16 words in the array W
+     */
+    for(t = 0; t < 16; t++)
+    {
+        W[t] = context->Message_Block[t * 4] << 24;
+        W[t] |= context->Message_Block[t * 4 + 1] << 16;
+        W[t] |= context->Message_Block[t * 4 + 2] << 8;
+        W[t] |= context->Message_Block[t * 4 + 3];
+    }
+    
+    for(t = 16; t < 80; t++)
+    {
+        W[t] = SHA1CircularShift(1,W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16]);
+    }
+    
+    A = context->Intermediate_Hash[0];
+    B = context->Intermediate_Hash[1];
+    C = context->Intermediate_Hash[2];
+    D = context->Intermediate_Hash[3];
+    E = context->Intermediate_Hash[4];
+    
+    for(t = 0; t < 20; t++)
+    {
+        temp =  SHA1CircularShift(5,A) +
+        ((B & C) | ((~B) & D)) + E + W[t] + K[0];
+        E = D;
+        D = C;
+        C = SHA1CircularShift(30,B);
+        
+        B = A;
+        A = temp;
+    }
+    
+    for(t = 20; t < 40; t++)
+    {
+        temp = SHA1CircularShift(5,A) + (B ^ C ^ D) + E + W[t] + K[1];
+        E = D;
+        D = C;
+        C = SHA1CircularShift(30,B);
+        B = A;
+        A = temp;
+    }
+    
+    for(t = 40; t < 60; t++)
+    {
+        temp = SHA1CircularShift(5,A) +
+        ((B & C) | (B & D) | (C & D)) + E + W[t] + K[2];
+        E = D;
+        D = C;
+        C = SHA1CircularShift(30,B);
+        B = A;
+        A = temp;
+    }
+    
+    for(t = 60; t < 80; t++)
+    {
+        temp = SHA1CircularShift(5,A) + (B ^ C ^ D) + E + W[t] + K[3];
+        E = D;
+        D = C;
+        C = SHA1CircularShift(30,B);
+        B = A;
+        A = temp;
+    }
+    
+    context->Intermediate_Hash[0] += A;
+    context->Intermediate_Hash[1] += B;
+    context->Intermediate_Hash[2] += C;
+    context->Intermediate_Hash[3] += D;
+    context->Intermediate_Hash[4] += E;
+    
+    context->Message_Block_Index = 0;
 }
 
-void Sha1Class::pad() {
-  // Implement SHA-1 padding (fips180-2 §5.1.1)
+/*
+ *  SHA1PadMessage
+ *
+ 
+ *  Description:
+ *      According to the standard, the message must be padded to an even
+ *      512 bits.  The first padding bit must be a '1'.  The last 64
+ *      bits represent the length of the original message.  All bits in
+ *      between should be 0.  This function will pad the message
+ *      according to those rules by filling the Message_Block array
+ *      accordingly.  It will also call the ProcessMessageBlock function
+ *      provided appropriately.  When it returns, it can be assumed that
+ *      the message digest has been computed.
+ *
+ *  Parameters:
+ *      context: [in/out]
+ *          The context to pad
+ *      ProcessMessageBlock: [in]
+ *          The appropriate SHA*ProcessMessageBlock function
+ *  Returns:
+ *      Nothing.
+ *
+ */
 
-  // Pad with 0x80 followed by 0x00 until the end of the block
-  addUncounted(0x80);
-  while (bufferOffset != 56) addUncounted(0x00);
-
-  // Append length in the last 8 bytes
-  addUncounted(0); // We're only using 32 bit lengths
-  addUncounted(0); // But SHA-1 supports 64 bit lengths
-  addUncounted(0); // So zero pad the top bits
-  addUncounted(byteCount >> 29); // Shifting to multiply by 8
-  addUncounted(byteCount >> 21); // as SHA-1 supports bitstreams as well as
-  addUncounted(byteCount >> 13); // byte.
-  addUncounted(byteCount >> 5);
-  addUncounted(byteCount << 3);
+void SHA1PadMessage(SHA1Context *context)
+{
+    /*
+     *  Check to see if the current message block is too small to hold
+     *  the initial padding bits and length.  If so, we will pad the
+     *  block, process it, and then continue padding into a second
+     *  block.
+     */
+    if (context->Message_Block_Index > 55)
+    {
+        context->Message_Block[context->Message_Block_Index++] = 0x80;
+        while(context->Message_Block_Index < 64)
+        {
+            context->Message_Block[context->Message_Block_Index++] = 0;
+        }
+        
+        SHA1ProcessMessageBlock(context);
+        
+        while(context->Message_Block_Index < 56)
+        {
+            context->Message_Block[context->Message_Block_Index++] = 0;
+        }
+    }
+    else
+    {
+        context->Message_Block[context->Message_Block_Index++] = 0x80;
+        while(context->Message_Block_Index < 56)
+        {
+            
+            context->Message_Block[context->Message_Block_Index++] = 0;
+        }
+    }
+    
+    /*
+     *  Store the message length as the last 8 octets
+     */
+    context->Message_Block[56] = context->Length_High >> 24;
+    context->Message_Block[57] = context->Length_High >> 16;
+    context->Message_Block[58] = context->Length_High >> 8;
+    context->Message_Block[59] = context->Length_High;
+    context->Message_Block[60] = context->Length_Low >> 24;
+    context->Message_Block[61] = context->Length_Low >> 16;
+    context->Message_Block[62] = context->Length_Low >> 8;
+    context->Message_Block[63] = context->Length_Low;
+    
+    SHA1ProcessMessageBlock(context);
 }
-
-
-uint8_t* Sha1Class::result(void) {
-  // Pad to complete the last block
-  pad();
-  
-  // Swap byte order back
-  for (int i=0; i<5; i++) {
-    uint32_t a,b;
-    a=state.w[i];
-    b=a<<24;
-    b|=(a<<8) & 0x00ff0000;
-    b|=(a>>8) & 0x0000ff00;
-    b|=a>>24;
-    state.w[i]=b;
-  }
-  
-  // Return pointer to hash (20 characters)
-  return state.b;
-}
-
-#define HMAC_IPAD 0x36
-#define HMAC_OPAD 0x5c
-
-void Sha1Class::initHmac(const uint8_t* key, int keyLength) {
-  uint8_t i;
-  memset(keyBuffer,0,BLOCK_LENGTH);
-  if (keyLength > BLOCK_LENGTH) {
-    // Hash long keys
-    init();
-    for (;keyLength--;) write(*key++);
-    memcpy(keyBuffer,result(),HASH_LENGTH);
-  } else {
-    // Block length keys are used as is
-    memcpy(keyBuffer,key,keyLength);
-  }
-  // Start inner hash
-  init();
-  for (i=0; i<BLOCK_LENGTH; i++) {
-    write(keyBuffer[i] ^ HMAC_IPAD);
-  }
-}
-
-uint8_t* Sha1Class::resultHmac(void) {
-  uint8_t i;
-  // Complete inner hash
-  memcpy(innerHash,result(),HASH_LENGTH);
-  // Calculate outer hash
-  init();
-  for (i=0; i<BLOCK_LENGTH; i++) write(keyBuffer[i] ^ HMAC_OPAD);
-  for (i=0; i<HASH_LENGTH; i++) write(innerHash[i]);
-  return result();
-}
-Sha1Class Sha1;

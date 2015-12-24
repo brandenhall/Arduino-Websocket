@@ -1,6 +1,6 @@
-## Websocket Client and Server for Arduino
+## Websocket Client and Server for ESP-8266
 
-This is a simple library that implements a Websocket client and server running on an Arduino.
+This is a simple library that implements a Websocket client and server running on an ESP-8266.
 
 ### Getting started
 
