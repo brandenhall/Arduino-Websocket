@@ -1,8 +1,10 @@
 /*
 Websocket-Arduino, a websocket implementation for Arduino
-Copyright 2011 Per Ejeklint
+Copyright 2016 Brendan Hall
 
 Based on previous implementations by
+Copyright 2011 Brendan Hall
+and
 Copyright 2010 Ben Swanson
 and
 Copyright 2010 Randall Brewer
@@ -40,24 +42,22 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 */
 
 
-#ifndef WEBSOCKETSERVER_H_
-#define WEBSOCKETSERVER_H_
+#ifndef WEBSOCKETCLIENT_H_
+#define WEBSOCKETCLIENT_H_
 
 #include <Arduino.h>
 #include <Stream.h>
 #include "String.h"
-#include "Server.h"
 #include "Client.h"
 
 // CRLF characters to terminate lines/handshakes in headers.
 #define CRLF "\r\n"
 
-// Amount of time (in ms) a user may be connected before getting disconnected 
+// Amount of time (in ms) a user may be connected before getting disconnected
 // for timing out (i.e. not sending any data to the server).
 #define TIMEOUT_IN_MS 10000
-#define BUFFER_LENGTH 32
 
-// ACTION_SPACE is how many actions are allowed in a program. Defaults to 
+// ACTION_SPACE is how many actions are allowed in a program. Defaults to
 // 5 unless overwritten by user.
 #ifndef CALLBACK_FUNCTIONS
 #define CALLBACK_FUNCTIONS 1
@@ -71,46 +71,66 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 
 #define SIZE(array) (sizeof(array) / sizeof(*array))
 
-class WebSocketServer {
+// WebSocket protocol constants
+// First byte
+#define WS_FIN            0x80
+#define WS_OPCODE_TEXT    0x01
+#define WS_OPCODE_BINARY  0x02
+#define WS_OPCODE_CLOSE   0x08
+#define WS_OPCODE_PING    0x09
+#define WS_OPCODE_PONG    0x0a
+// Second byte
+#define WS_MASK           0x80
+//#define WS_MASK           0x00
+#define WS_SIZE16         126
+#define WS_SIZE64         127
+
+
+class WebSocketClient {
 public:
 
     // Handle connection requests to validate and process/refuse
     // connections.
-    bool handshake(Client &client);
-    
+    bool handshake(Client &client, bool socketio = false);
+
     // Get data off of the stream
-    String getData();
+    bool getData(String& data, uint8_t *opcode = NULL);
+    bool getData(char *data, uint8_t *opcode = NULL);
 
     // Write data to the stream
-    void sendData(const char *str);
-    void sendData(String str);
+    void sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
+    void sendData(String str, uint8_t opcode = WS_OPCODE_TEXT, bool fast = true);
+
+    bool issocketio;
+    char *path;
+    char *host;
+    char *protocol;
 
 private:
     Client *socket_client;
+    // socket.io session id
+    char sid[32];
     unsigned long _startMillis;
 
     const char *socket_urlPrefix;
 
-    String origin;
-    String host;
-    bool hixie76style;
-
     // Discovers if the client's header is requesting an upgrade to a
     // websocket connection.
-    bool analyzeRequest(int bufferLength);
+    bool analyzeRequest();
 
-#ifdef SUPPORT_HIXIE_76
-    String handleHixie76Stream();
-#endif
-    String handleStream();    
-    
+    bool handleStream(String& data, uint8_t *opcode);
+    bool handleStream(char *data, uint8_t *opcode);
+
     // Disconnect user gracefully.
     void disconnectStream();
-    
+
     int timedRead();
 
-    void sendEncodedData(char *str);
-    void sendEncodedData(String str);
+    void sendEncodedData(char *str, uint8_t opcode);
+    void sendEncodedData(String str, uint8_t opcode);
+
+    void sendEncodedDataFast(char *str, uint8_t opcode);
+    void sendEncodedDataFast(String str, uint8_t opcode);
 };
 
 

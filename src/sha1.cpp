@@ -1,6 +1,10 @@
 #include <string.h>
+//#ifdef ARDUINO_SAMD_ZERO
+//#else
+#ifdef __AVR__
 #include <avr/io.h>
 #include <avr/pgmspace.h>
+#endif
 #include "sha1.h"
 
 #define SHA1_K0 0x5a827999
@@ -8,7 +12,7 @@
 #define SHA1_K40 0x8f1bbcdc
 #define SHA1_K60 0xca62c1d6
 
-uint8_t sha1InitState[] PROGMEM = {
+const uint8_t sha1InitState[] PROGMEM = {
   0x01,0x23,0x45,0x67, // H0
   0x89,0xab,0xcd,0xef, // H1
   0xfe,0xdc,0xba,0x98, // H2
@@ -101,7 +105,7 @@ void Sha1Class::pad() {
 uint8_t* Sha1Class::result(void) {
   // Pad to complete the last block
   pad();
-  
+
   // Swap byte order back
   for (int i=0; i<5; i++) {
     uint32_t a,b;
@@ -112,7 +116,7 @@ uint8_t* Sha1Class::result(void) {
     b|=a>>24;
     state.w[i]=b;
   }
-  
+
   // Return pointer to hash (20 characters)
   return state.b;
 }

@@ -1,0 +1,24 @@
+#######################################
+# Syntax Coloring Map WebsocketFast
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+WebSocketClient	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+handshake	KEYWORD2
+getData	KEYWORD2
+sendData	KEYWORD2
+path	KEYWORD2
+host	KEYWORD2
+protocol	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
