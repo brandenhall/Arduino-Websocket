@@ -45,8 +45,15 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 
 #include <Arduino.h>
 #include <Stream.h>
-#include "String.h"
+#include "string.h"
 #include "Client.h"
+
+//Uncoment the following line for debug output ot serial port
+//#define DEBUGGING
+
+#if defined ESP8266 || defined ESP32 || defined ARDUINO_SAMD_MKR1000
+#define WS_BUFFERED_SEND
+#endif
 
 // CRLF characters to terminate lines/handshakes in headers.
 #define CRLF "\r\n"
@@ -64,7 +71,13 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
 // Don't allow the client to send big frames of data. This will flood the Arduinos
 // memory and might even crash it.
 #ifndef MAX_FRAME_LENGTH
+
+#if defined ESP8266 || defined ESP32 || defined ARDUINO_SAMD_MKR1000
+#define MAX_FRAME_LENGTH 2048
+#else
 #define MAX_FRAME_LENGTH 256
+#endif
+
 #endif
 
 #define SIZE(array) (sizeof(array) / sizeof(*array))
@@ -85,34 +98,55 @@ http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-75
   
 class WebSocketClient {
 public:
-
+	WebSocketClient(char *WsPath = NULL, char *WsHost = NULL, char *WsHeaders = NULL, char *WsProtocol = NULL);
+	void setPath(char* WsPath);
+	void setHeaders(char *WsHeaders);
+	void setHost(char * WsHost);
+	void setProtocol(char * WsProtocol);
     // Handle connection requests to validate and process/refuse
     // connections.
-    bool handshake(Client &client);
-    
+    int handshake(Client &client);
+    //Check if socket os connected
+	int connected();
     // Get data off of the stream
     bool getData(String& data, uint8_t *opcode = NULL);
+	bool getData(char *data, unsigned int dataLen, uint8_t *opcode = NULL);
 
     // Write data to the stream
     void sendData(const char *str, uint8_t opcode = WS_OPCODE_TEXT);
     void sendData(String str, uint8_t opcode = WS_OPCODE_TEXT);
 
-    char *path;
-    char *host;
-    char *protocol;
+#ifdef WS_BUFFERED_SEND
+	int process(void);
+#endif	
+
+	void disconnect(void) {disconnectStream();};
+	
 
 private:
     Client *socket_client;
-    unsigned long _startMillis;
-
+	
     const char *socket_urlPrefix;
+    char *path;
+    char *host;
+    char *protocol;
+	char *headers;
+
+#ifdef WS_BUFFERED_SEND
+	uint8_t buffer[MAX_FRAME_LENGTH];
+	unsigned int bufferIndex; 
+	int bufferedSend(uint8_t c);
+#endif	
 
     // Discovers if the client's header is requesting an upgrade to a
     // websocket connection.
-    bool analyzeRequest();
+    int analyzeRequest();
+
+	bool handleMessageHeader(uint8_t *msgtype, unsigned int *length, bool *hasMask, uint8_t *mask, uint8_t *opcode);
 
     bool handleStream(String& data, uint8_t *opcode);    
-    
+    bool handleStream(char *data, unsigned int dataLen, uint8_t *opcode);
+	
     // Disconnect user gracefully.
     void disconnectStream();
     

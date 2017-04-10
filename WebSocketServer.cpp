@@ -5,11 +5,15 @@
 #include "WebSocketServer.h"
 
 #ifdef SUPPORT_HIXIE_76
+#ifndef ESP32
 #include "MD5.c"
+#else
+#include <md5.h>
+#endif	
 #endif
 
 #include "sha1.h"
-#include "base64.h"
+#include "Base64.h"
 
 
 bool WebSocketServer::handshake(Client &client) {

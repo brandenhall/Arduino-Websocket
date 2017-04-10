@@ -18,6 +18,6 @@ Inside of the WebSocketServer class there is a compiler directive to turn on sup
 Because of limitations of the current Arduino platform (Uno at the time of this writing), this library does not support messages larger than 65535 characters. In addition, this library only supports single-frame text frames. It currently does not recognize continuation frames, binary frames, or ping/pong frames.
 
 ### Credits
-Thank you to github user ejeklint for the excellent starting point for this library. From his original Hixie76-only code I was able to add support for RFC 6455 and create the WebSocket client.
+Thank you to github user ejeklint and  brandenhall for the excellent starting point for this library. From ejeklint's original Hixie76-only code brandenhall was able to add support for RFC 6455 and create the WebSocket client. Then I only had to improve stability and speed. 
 
-- Branden
+- Pablo

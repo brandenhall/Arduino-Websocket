@@ -19,7 +19,8 @@
  * These notices must be retained in any copies of any part of this
  * documentation and/or software.
  */
-
+#ifndef MD5_H
+#define MD5_H
 /* MD5 context. */
 typedef struct {
   UINT4 state[4];                                   /* state (ABCD) */
@@ -33,3 +34,4 @@ void MD5Final (unsigned char [16], MD5_CTX *);
 
 /* Function used by Websockets implementation */
 void MD5 (unsigned char [], unsigned char [], unsigned int);
+#endif /*MD5_H*/

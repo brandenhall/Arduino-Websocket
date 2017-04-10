@@ -20,7 +20,7 @@
  * These notices must be retained in any copies of any part of this
  * documentation and/or software.
  */
-
+#ifndef ESP32
 #include "global.h"
 #include "MD5.h"
 
@@ -301,3 +301,4 @@ void MD5(unsigned char strInputString[], unsigned char md5Digest[], unsigned int
 	MD5Update(&ctx, strInputString, len);
 	MD5Final(md5Digest, &ctx);
 }
+#endif
